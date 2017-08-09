@@ -10,22 +10,22 @@ import argyle.NonEmptyList
 
 package object argyle {
   
-  def repeated[A](keys: String*)(implicit p: Reader[A]): Arg[List[A]] = {
-    new NamedArgumentParser[List[A]](keys.toSet, Nil, { xs => sequence(xs.map(p.apply)) })
+  def repeated[A : Reader](keys: String*): Arg[List[A]] = {
+    new NamedArgumentParser[List[A]](keys.toSet, Nil, { xs => sequence(xs.map(implicitly[Reader[A]].apply)) })
   }
   
-  def repeatedAtLeastOnce[A](keys: String*)(implicit p: Reader[A]): Arg[List[A]] = repeated[A](keys:_*).flatMap {
+  def repeatedAtLeastOnce[A : Reader](keys: String*): Arg[List[A]] = repeated[A](keys:_*).flatMap {
     case Nil => Failure(new Error(s"Missing value for required arg ${keys.mkString("/")}"))
     case xs => Success(xs)
   }
   
-  def required[A](keys: String*)(implicit p: Reader[A]): Arg[A] = repeated[A](keys:_*).flatMap {
+  def required[A : Reader](keys: String*): Arg[A] = repeated[A](keys:_*).flatMap {
     case List(x) => Success(x)
     case Nil => Failure(new Error(s"Missing value for required arg ${keys.mkString("/")}"))
     case _ => Failure(new Error(s"More than one value for arg ${keys.mkString("/")}"))
   }
 
-  def optional[A](keys: String*)(implicit p: Reader[A]): Arg[Option[A]] = repeated[A](keys:_*).flatMap {
+  def optional[A : Reader](keys: String*): Arg[Option[A]] = repeated[A](keys:_*).flatMap {
     case List(x) => Success(Some(x))
     case Nil => Success(None)
     case _ => Failure(new Error(s"More than one value for arg ${keys.mkString("/")}"))
@@ -42,16 +42,16 @@ package object argyle {
     }
   }
   
-  def requiredFree[A](implicit p: Reader[A]): Arg[A] = optionalFree(p).flatMap {
+  def requiredFree[A : Reader]: Arg[A] = optionalFree[A].flatMap {
     case None => Failure(new Error("Missing required argument"))
     case Some(a) => Success(a)
   }
   
-  def optionalFree[A](implicit p: Reader[A]): Arg[Option[A]] = new SingleFreeArg(p.apply)
+  def optionalFree[A : Reader]: Arg[Option[A]] = new SingleFreeArg(implicitly[Reader[A]].apply)
   
-  def repeatedFree[A](implicit p: Reader[A]): Arg[List[A]] = RepeatedFreeArg(p.apply)
+  def repeatedFree[A : Reader]: Arg[List[A]] = RepeatedFreeArg(implicitly[Reader[A]].apply)
   
-  def repeatedAtLeastOnceFree[A](implicit p: Reader[A]): Arg[List[A]] = repeatedFree[A].flatMap {
+  def repeatedAtLeastOnceFree[A : Reader]: Arg[List[A]] = repeatedFree[A].flatMap {
     case Nil => Failure(new Error("Missing required argument"))
     case xs => Success(xs)
   }

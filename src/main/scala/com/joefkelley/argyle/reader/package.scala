@@ -22,11 +22,11 @@ package object reader {
     }
   }
   
-  implicit def eitherParser[A, B](implicit ap: Reader[A], bp: Reader[B]): Reader[Either[A, B]] = {
+  implicit def eitherParser[A : Reader, B : Reader]: Reader[Either[A, B]] = {
     new Reader[Either[A, B]] {
-      def apply(s: String): Try[Either[A, B]] = ap(s) match {
+      def apply(s: String): Try[Either[A, B]] = implicitly[Reader[A]].apply(s) match {
         case Success(a) => Success(Left(a))
-        case Failure(e1) => bp(s) match {
+        case Failure(e1) => implicitly[Reader[B]].apply(s) match {
           case Success(b) => Success(Right(b))
           case Failure(e2) => Failure(e2)
         }
@@ -34,9 +34,9 @@ package object reader {
     }
   }
   
-  implicit def listParser[A](implicit ap: Reader[A]): Reader[List[A]] = new Reader[List[A]] {
+  implicit def listParser[A : Reader]: Reader[List[A]] = new Reader[List[A]] {
     def apply(s: String): Try[List[A]] = {
-      if (s.isEmpty()) Success(List.empty[A]) else Utils.sequence(s.split(",").toList.map(ap.apply))
+      if (s.isEmpty()) Success(List.empty[A]) else Utils.sequence(s.split(",").toList.map(implicitly[Reader[A]].apply))
     }
   }
 }
