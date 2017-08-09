@@ -103,7 +103,7 @@ Creates an `Arg[String]` that will match arguments passed in the form "--name Jo
 val ageArg = required[Int]("--age")
 ```
 
-The specified argument type will be the type of the resulting object that is eventually returned by the parser. In this case it is Int, so this creates an `Arg[Int]`. The signature of the required method is:
+The specified argument type will be the type of the resulting object that is eventually returned by the parser. In this case it is Int, so this creates an `Arg[Int]`. The signature of the `required` method is:
 
 ```scala
 def required[A : Reader](keys: String*): Arg[A]
@@ -123,7 +123,7 @@ val result: Try[Person] = personArg.parse(args)
 
 Finally, we call `.parse(args)`, which will return a `Success[Person]` iff both "--name" and "--age" are supplied, the argument for "--age" is an integer, and there are no other unused arguments. Otherwise, it will return a `Failure` containing an appropriate error message. By default, the args are expected in the form "--name Joe --age 100", but equals-separated format can also be used by calling `.parse(args, com.joefkelley.argyle.EqualsSeparated)`, for example "--name=Joe --age=100".
 
-## Documentation
+## Full API Details
 
 **The `com.joefkelley.argyle` package object contains several methods for creating `Arg`s. They are:**
 
@@ -183,10 +183,12 @@ def repeatedAtLeastOnceFree[A : Reader]: Arg[List[A]]
 ```
 Same as above, except fails if no arguments are present.
 
+Note that the order of free arguments is important, and no special "back-tracking" is done; they are matched greedily. For example, `repeatedFree[String] and requiredFree[String]` will always fail because `repeatedFree[String]` will consume all unmatched arguments since it is first in the `and`.
+
 ```scala
 def requiredBranch[A](kvs: (String, Arg[A])*): Arg[A]
 ```
-Allows branching behavior based on the presents of keys in the key-value pairs. "Activates" one of the passed args based on which key is present, and parses using that arg. For example: `requiredBranch("-a" -> required[String]("--foo"), "-b" -> requiredFree[String])` would parse either "-a --foo hello" or "-b hello". Arbitrarily-complex args can be used, including nested branches or anything else. Note that the "branching" argument must be present in the args before the arguments parsed within that branch ("--foo hello -a" would not work).
+Allows branching behavior based on the presence of keys in the key-value pairs. "Activates" one of the passed args based on which key is present, and parses using that arg. For example: `requiredBranch("-a" -> required[String]("--foo"), "-b" -> requiredFree[String])` would parse either "-a --foo hello" or "-b hello". Arbitrarily-complex args can be used, including nested branches or anything else. Note that the "branching" argument must be present in the command line arguments before the arguments parsed within that branch (i.e. "--foo hello -a" would not work).
 
 ```scala
 def optionalBranch[A](kvs: (String, Arg[A])*): Arg[Option[A]]
@@ -242,7 +244,7 @@ to
 ```
 The `arg.to[MyClass]` is useful to avoid dealing with shapeless `HLists` directly. Can be used if the type of `arg` is an `HList` and the output class's fields match exactly the types of the `HList`.
 
-** The `Arg` class is meant to be extensible **
+**The `Arg` class is meant to be extensible**
 
 Custom parsing logic can added by implementing the `Arg` trait's two abstract methods:
 
@@ -258,13 +260,14 @@ trait Arg[+A] {
 
   def complete: Try[A]
 
-}```
+}
+```
 
 The `visit` method will be called multiple times, passing in smaller and smaller subsets of the command-line arguments. If the head of the passed list is not relevant to the Arg, it should return `VisitNoop`. If the head is relevant, but incorrect or unexpected in some way, it should return `VisitError`. Any errors will fail the entire parse. If the head is relevant and correct, A `VisitConsume` should be returned containing a new `Arg` to use for parsing instead of this from here on out, and the remaining unmatched/unconsumed part of the arguments. If you do not wish to use a purely-functional style, you may instead mutate the `Arg` and return `this`.
 
-The branching argument class is a good simple example implementation:
+The branching arg class is a good simple example implementation:
 ```scala
-case class BranchArg[A](branch: Map[String, Arg[A]]) extends Arg[Option[A]] {
+class BranchArg[A](branch: Map[String, Arg[A]]) extends Arg[Option[A]] {
   override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[Option[A]] = xs match {
     case NonEmptyList(x, rest) => branch.get(x) match {
       case Some(arg) => VisitConsume(arg.map(a => Some(a)), rest)
@@ -272,9 +275,10 @@ case class BranchArg[A](branch: Map[String, Arg[A]]) extends Arg[Option[A]] {
     }
   }
   override def complete: Try[Option[A]] = Success(None)
-}```
+}
+```
 
-** An instance of the `Reader` typeclass is required for parsing individual argument values from strings to specific types **
+**An instance of the `Reader` typeclass is required for parsing individual argument values from strings to specific types**
 
 This is the one section of code that is somewhat less type-safe (it's "stringly-typed"), so it is isolated and very simple. Default instances are provided for: String, Boolean, Byte, Short, Int, Long, Float, Double, Char, `List[A : Reader]` (comma-separated), and `Either[A : Reader, B : Reader]`.
 
@@ -282,7 +286,8 @@ If you wish to parse to some other class, this is also extensible. The trait to 
 ```scala
 trait Reader[A] {
   def apply(s: String): Try[A]
-}```
+}
+```
 
 Built-in instances are, unsurprisingly, very simple examples to follow:
 ```scala
