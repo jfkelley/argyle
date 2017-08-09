@@ -1,8 +1,6 @@
-<p align="center">
 ![Argyle](argyle-logo-msmall.png)
 
 Command-line argument parsing for Scala
-</p>
 
 ## Example:
 
