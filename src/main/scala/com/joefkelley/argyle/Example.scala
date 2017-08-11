@@ -29,7 +29,7 @@ object Example extends App {
   case class OtherGender(str: String) extends Gender
   
   val a = (
-    required[String]("--name") and
+    required[String]("--name", "-n") and
     optional[String]("--occupation") and
     required[Int]("--age") and
     repeated[String]("--hobby") and
@@ -47,8 +47,5 @@ object Example extends App {
     case Success(person) => println(person)
     case Failure(e) => throw e
   }
-  
-  
-  
   
 }

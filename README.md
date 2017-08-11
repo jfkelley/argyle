@@ -185,6 +185,8 @@ Same as above, except fails if no arguments are present.
 
 Note that the order of free arguments is important, and no special "back-tracking" is done; they are matched greedily. For example, `repeatedFree[String] and requiredFree[String]` will always fail because `repeatedFree[String]` will consume all unmatched arguments since it is first in the `and`.
 
+Also note that free args do not work correctly when combined using `or` or `xor`. To do so correctly would require back-tracking that is not currently implemented.
+
 ```scala
 def requiredBranch[A](kvs: (String, Arg[A])*): Arg[A]
 ```
@@ -226,6 +228,8 @@ Returns a new Arg that succeeds if either this, or the passed in arg is present 
 def or[B >: A](arg2: Arg[B], f: (B, B) => B): Arg[B]
 ```
 Same as `xor`, except does not fail if both are present. Instead, calls `f` with the output from both. (In the order `f(thisOutput, arg2Output)`).
+
+Also note that free args do not work correctly when combined using `or` or `xor`. To do so correctly would require back-tracking that is not currently implemented.
 
 ```scala
 implicit class Default[A](arg: Arg[Option[A]]) {

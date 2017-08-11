@@ -3,11 +3,11 @@ import Dependencies._
 lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(
-      organization := "com.example",
+      organization := "com.joefkelley",
       scalaVersion := "2.12.1",
-      version      := "0.1.0-SNAPSHOT"
+      version      := "1.0.0-rc1"
     )),
-    name := "Argyle",
+    name := "argyle",
     libraryDependencies ++= Seq(
       scalaTest % Test,
       shapeless
