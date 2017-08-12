@@ -65,10 +65,6 @@ package object argyle {
     case None => Failure(new Error(s"Missing required branching argument: one of ${kvs.map(_._1).mkString(", ")}"))
   }
   
-  implicit class Default[A](arg: Arg[Option[A]]) {
-    def default(a: A): Arg[A] = arg.map(_.getOrElse(a))
-  }
-  
   def constant[A](a: A): Arg[A] = new Arg[A] {
     override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode) = VisitNoop
     override def complete = Success(a)

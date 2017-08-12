@@ -34,6 +34,8 @@ trait Arg[+A] {
   def map[B](f: A => B): Arg[B] = flatMap(a => Success(f(a)))
   def as[B](implicit f: A => B): Arg[B] = map(f)
   
+  def default[B](b: B)(implicit ev: A <:< Option[B]): Arg[B] = map(a => ev(a).getOrElse(b))
+  
   def or[B >: A](arg2: Arg[B], f: (B, B) => B): Arg[B] = combine(this, arg2, { (t1: Try[B], t2: Try[B]) =>
     (t1, t2) match {
       case (Success(b1), Success(b2)) => Success(f(b1, b2))
