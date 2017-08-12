@@ -232,11 +232,9 @@ Same as `xor`, except does not fail if both are present. Instead, calls `f` with
 Also note that free args do not work correctly when combined using `or` or `xor`. To do so correctly would require back-tracking that is not currently implemented.
 
 ```scala
-implicit class Default[A](arg: Arg[Option[A]]) {
-  def default(a: A): Arg[A]
-}
+def default[B](b: B)(implicit ev: A <:< Option[B]): Arg[B]
 ```
-For arguments that result in an `Option[A]`, such as those from `optional[A](...)`, provides an extension `default` method that promotes it from an `Arg[Option[A]]` to an `Arg[A]` by providing a default result value for when the argument is not present.
+For arguments that result in an `Option[A]`, such as those from `optional[A](...)`, promotes it from an `Arg[Option[A]]` to an `Arg[A]` by providing a default result value for when the argument is not present.
 
 ```scala
 and
