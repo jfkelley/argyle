@@ -57,6 +57,12 @@ object Example extends App {
 }
 ```
 
+## SBT Dependency
+
+```scala
+libraryDependencies += "com.joefkelley" %% "argyle" % "1.0.0"
+```
+
 ## Background
 Argyle is a simple tool for parsing command-line arguments. Its goals are:
 
