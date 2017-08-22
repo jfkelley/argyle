@@ -183,7 +183,9 @@ def repeatedAtLeastOnceFree[A : Reader]: Arg[List[A]]
 ```
 Same as above, except fails if no arguments are present.
 
-Note that the order of free arguments is important; they are matched greedily in order, but with back-tracking if neccessary. For example, `repeatedFree[String] and requiredFree[String]` will match all argumentss except the last for the `repeatedFree`, and just the last for the `requiredFree`. If the order were reversed, the `requiredFree` would match the first argument, and the `repeatedFree` would match the rest. Something like `repeatedFree[String] and requiredFree[Int]` should also successfully match "foo 5 bar", since back-tracking will eventually find that the `requiredFree[Int]` must match the "5", and the `repeatedFree[String]` will match everything else.
+Note that the order of free arguments is important; they are matched greedily in order, but with back-tracking if neccessary. For example, `repeatedFree[String] and requiredFree[String]` will match all arguments except the last for the `repeatedFree`, and just the last for the `requiredFree`. If the order were reversed, the `requiredFree` would match the first argument, and the `repeatedFree` would match the rest.
+
+Something like `repeatedFree[String] and requiredFree[Int]` should also successfully match "foo 5 bar", since back-tracking will eventually find that the `requiredFree[Int]` must match the "5", and the `repeatedFree[String]` will match everything else.
 
 ```scala
 def requiredBranch[A](kvs: (String, Arg[A])*): Arg[A]
