@@ -1,6 +1,16 @@
 package com.joefkelley.argyle
 
-import scala.util.{Try, Success, Failure}
+import java.io.File
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import java.time.LocalTime
+import java.time.LocalDateTime
 
 package object reader {
   trait Reader[A] {
@@ -20,6 +30,24 @@ package object reader {
       if (s.length == 1) Success(s.head)
       else Failure(new Error(s"Couldn't convert $s to single character"))
     }
+  }
+  implicit val FileParser = new Reader[File] { def apply(s: String) = Success(new File(s)) }
+  implicit val PathParser = new Reader[Path] { def apply(s: String) = Success(Paths.get(s)) }
+  implicit val ScalaDurationParser = new Reader[scala.concurrent.duration.Duration] {
+    def apply(s: String) = Try(scala.concurrent.duration.Duration(s))
+  }
+  implicit val JavaDurationParser = new Reader[java.time.Duration] {
+    def apply(s: String) = Try(java.time.Duration.parse(s))
+  }
+  
+  implicit val DateParser = new Reader[LocalDate] {
+    def apply(s: String) = Try(LocalDate.parse(s, DateTimeFormatter.ISO_DATE))
+  }
+  implicit val TimeParser = new Reader[LocalTime] {
+    def apply(s: String) = Try(LocalTime.parse(s, DateTimeFormatter.ISO_TIME))
+  }
+  implicit val DateTimeParser = new Reader[LocalDateTime] {
+    def apply(s: String) = Try(LocalDateTime.parse(s, DateTimeFormatter.ISO_LOCAL_DATE_TIME))
   }
   
   implicit def eitherParser[A : Reader, B : Reader]: Reader[Either[A, B]] = {

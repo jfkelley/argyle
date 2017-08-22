@@ -13,7 +13,7 @@ object VisitNoop extends VisitResult[Nothing]
 
 trait Arg[+A] {
   
-  def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[A]
+  def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[A]]
   
   def complete: Try[A]
   
@@ -21,8 +21,8 @@ trait Arg[+A] {
   def flatMap[B](f: A => Try[B]): Arg[B] = {
     val current = this
     new Arg[B] {
-      override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[B] = {
-        current.visit(xs, free, mode) match {
+      override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[B]] = {
+        current.visit(xs, mode).map {
           case v: VisitError => v
           case VisitNoop => VisitNoop
           case VisitConsume(next, remaining) => VisitConsume(next.flatMap(f), remaining)
@@ -55,21 +55,26 @@ trait Arg[+A] {
   })
   
   def parse(xs: List[String], mode: ArgMode): Try[A] = {
-    @tailrec
-    def _parse(currentArg: Arg[A], currentArgs: List[String]): Try[A] = NonEmptyList(currentArgs) match {
+    def _parse(currentArg: Arg[A], xs: List[String]): Try[A] = NonEmptyList(xs) match {
       case None => currentArg.complete
-      case Some(nonEmpty) => currentArg.visit(nonEmpty, false, mode) match {
-        case VisitError(msg) => Failure(new Error(msg))
-        case VisitConsume(next, remaining) => _parse(next, remaining)
-        case VisitNoop => currentArg.visit(nonEmpty, true, mode) match {
-          case VisitError(msg) => Failure(new Error(msg))
-          case VisitConsume(next, remaining) => _parse(next, remaining)
-          case VisitNoop => Failure(new Error("Unused argument: " + xs.head))
+      case Some(nonEmpty) => {
+        val options = currentArg.visit(nonEmpty, mode)
+        options.foldLeft[Try[A]](Failure(new Error("Unused argument: " + xs.head))) { case (cur, opt) =>
+          if (cur.isSuccess) {
+            cur
+          } else {
+            opt match {
+              case VisitError(msg) => Failure(new Error(msg))
+              case VisitConsume(next, remaining) => _parse(next, remaining)
+              case VisitNoop => cur
+            }
+          }
         }
       }
     }
     _parse(this, xs)
   }
+
   def parse(xs: Array[String], mode: ArgMode = SpaceSeparated): Try[A] = parse(xs.toList, mode)
   def parse(xs: String*): Try[A] = parse(xs.toArray)
 }
@@ -77,21 +82,21 @@ trait Arg[+A] {
 private[argyle] case class NamedArgumentParser[A]
   (names: Set[String], collected: List[String], completeF: List[String] => Try[A]) extends Arg[A] {
   
-  override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[A] = mode match {
+  override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[A]] = mode match {
     case SpaceSeparated => {
       xs match {
         case NonEmptyList(first, rest1) if names.contains(first) => rest1 match {
-          case second :: rest2 => VisitConsume(this.copy(collected = collected :+ second), rest2)
-          case Nil => VisitError("Missing argument for key " + first)
+          case second :: rest2 => Seq(VisitConsume(this.copy(collected = collected :+ second), rest2))
+          case Nil => Seq(VisitError("Missing argument for key " + first))
         }
-        case _ => VisitNoop
+        case _ => Seq(VisitNoop)
       }
     }
     case EqualsSeparated => {
       xs match {
         case NonEmptyList(first, rest) => names.find(n => first.startsWith(n + '=')) match {
-          case Some(name) => VisitConsume(this.copy(collected = collected :+ first.drop(name.size + 1)), rest)
-          case None => VisitNoop
+          case Some(name) => Seq(VisitConsume(this.copy(collected = collected :+ first.drop(name.size + 1)), rest))
+          case None => Seq(VisitNoop)
         }
       }
     }
@@ -101,60 +106,52 @@ private[argyle] case class NamedArgumentParser[A]
 }
 
 private[argyle] case class OptionMapParser[A](optionMap: Map[String, A]) extends Arg[Option[A]] {
-  override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[Option[A]] = xs match {
+  override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[Option[A]]] = xs match {
     case NonEmptyList(head, rest) => optionMap.get(head) match {
-      case Some(a) => VisitConsume(new Arg[Some[A]] {
-        override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[Some[A]] = {
+      case Some(a) => Seq(VisitConsume(new Arg[Some[A]] {
+        override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[Some[A]]] = {
           xs match {
             case NonEmptyList(h2, rest) if optionMap.contains(h2) => {
               if (h2 == head) {
-                VisitError(s"Argument $head is present more than once")
+                Seq(VisitError(s"Argument $head is present more than once"))
               } else {
-                VisitError(s"Conflicting arguments $head and $h2")
+                Seq(VisitError(s"Conflicting arguments $head and $h2"))
               }
             }
-            case _ => VisitNoop
+            case _ => Seq(VisitNoop)
           }
         }
         override def complete: Try[Some[A]] = Success(Some(a))
-      }, rest)
-      case None => VisitNoop
+      }, rest))
+      case None => Seq(VisitNoop)
     }
   }
   override def complete: Try[Option[A]] = Success(None)
 }
 
 private[argyle] case class SingleFreeArg[A](read: String => Try[A]) extends Arg[Option[A]] {
-  override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[Option[A]] = {
-    if (!free) {
-      VisitNoop
-    } else xs match {
-      case NonEmptyList(head, rest) => VisitConsume(new Arg[Option[A]] {
-        override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode) = VisitNoop
-        override def complete = read(head).map(Some.apply)
-      }, rest)
-    }
+  override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[Option[A]]] = xs match {
+    case NonEmptyList(head, rest) => Seq(VisitNoop, VisitConsume(new Arg[Option[A]] {
+      override def visit(xs: NonEmptyList[String], mode: ArgMode) = Seq(VisitNoop)
+      override def complete = read(head).map(Some.apply)
+    }, rest))
   }
   override def complete: Try[Option[A]] = Success(None)
 }
 
 private[argyle] case class RepeatedFreeArg[A](
     parse: String => Try[A], collected: List[String] = Nil) extends Arg[List[A]] {
-  override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[List[A]] = {
-    if (!free) {
-      VisitNoop
-    } else xs match {
-      case NonEmptyList(head, rest) => VisitConsume(this.copy(collected = collected :+ head), rest)
-    }
+  override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[List[A]]] = xs match {
+    case NonEmptyList(head, rest) => Seq(VisitNoop, VisitConsume(this.copy(collected = collected :+ head), rest))
   }
   override def complete: Try[List[A]] = Utils.sequence(collected.map(parse))
 }
 
 private[argyle] case class BranchArg[A](branch: Map[String, Arg[A]]) extends Arg[Option[A]] {
-  override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[Option[A]] = xs match {
+  override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[Option[A]]] = xs match {
     case NonEmptyList(x, rest) => branch.get(x) match {
-      case Some(arg) => VisitConsume(arg.map(a => Some(a)), rest)
-      case None => VisitNoop
+      case Some(arg) => Seq(VisitConsume(arg.map(a => Some(a)), rest))
+      case None => Seq(VisitNoop)
     }
   }
   override def complete: Try[Option[A]] = Success(None)

@@ -66,21 +66,20 @@ package object argyle {
   }
   
   def constant[A](a: A): Arg[A] = new Arg[A] {
-    override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode) = VisitNoop
+    override def visit(xs: NonEmptyList[String], mode: ArgMode) = Seq(VisitNoop)
     override def complete = Success(a)
   }
   
   def combine[A, B, C](arg1: Arg[A], arg2: Arg[B], combineFinish: (Try[A], Try[B]) => Try[C]): Arg[C] = new Arg[C] {
-    override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[C] = {
-      arg1.visit(xs, free, mode) match {
-        case v: VisitError => v
-        case VisitConsume(next1, remaining) => VisitConsume(combine(next1, arg2, combineFinish), remaining)
-        case VisitNoop => {
-          arg2.visit(xs, free, mode) match {
-            case v: VisitError => v
-            case VisitConsume(next2, remaining) => VisitConsume(combine(arg1, next2, combineFinish), remaining)
-            case VisitNoop => VisitNoop
-          }
+    override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[C]] = {
+      val opts1 = arg1.visit(xs, mode)
+      opts1.flatMap {
+        case v: VisitError => Seq(v)
+        case VisitConsume(next1, remaining) => Seq(VisitConsume(combine(next1, arg2, combineFinish), remaining))
+        case VisitNoop => arg2.visit(xs, mode).map {
+          case v: VisitError => v
+          case VisitConsume(next2, remaining) => VisitConsume(combine(arg1, next2, combineFinish), remaining)
+          case VisitNoop => VisitNoop
         }
       }
     }

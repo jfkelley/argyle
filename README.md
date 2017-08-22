@@ -109,7 +109,7 @@ The specified argument type will be the type of the resulting object that is eve
 def required[A : Reader](keys: String*): Arg[A]
 ```
 
-Note that the type requires an implicit typeclass `com.joefkelley.argyle.Reader[A]`. There are built-in values for all primitive types, Strings, Lists (comma-separated), and Eithers. If you wish to use some different parsing logic, the Reader trait has a very simple interface that you can implement.
+Note that the type requires an implicit typeclass `com.joefkelley.argyle.Reader[A]`. There are built-in values for all primitive types, Files, ISO-8601 Dates and Times, Lists (comma-separated), and Eithers. If you wish to use some different parsing logic, the Reader trait has a very simple interface that you can implement.
 
 ```scala
 val personArg = (nameArg and ageArg).to[Person]
@@ -166,7 +166,7 @@ If any of the provided keys are present, results in `true`, otherwise `false`.
 ```scala
 def requiredFree[A : Reader]: Arg[A]
 ```
-Matches any argument, with lower priority than "keyed" arguments. For example, `requiredFree[String] and required[Int]("--n")` would match "--n 5 foo". Fails if no extra args are present.
+Matches any argument. For example, `requiredFree[String] and required[Int]("--n")` would match "--n 5 foo". Fails if no extra args are present.
 
 ```scala
 def optionalFree[A : Reader]: Arg[Option[A]]
@@ -183,9 +183,7 @@ def repeatedAtLeastOnceFree[A : Reader]: Arg[List[A]]
 ```
 Same as above, except fails if no arguments are present.
 
-Note that the order of free arguments is important, and no special "back-tracking" is done; they are matched greedily. For example, `repeatedFree[String] and requiredFree[String]` will always fail because `repeatedFree[String]` will consume all unmatched arguments since it is first in the `and`.
-
-Also note that free args do not work correctly when combined using `or` or `xor`. To do so correctly would require back-tracking that is not currently implemented.
+Note that the order of free arguments is important; they are matched greedily in order, but with back-tracking if neccessary. For example, `repeatedFree[String] and requiredFree[String]` will match all argumentss except the last for the `repeatedFree`, and just the last for the `requiredFree`. If the order were reversed, the `requiredFree` would match the first argument, and the `repeatedFree` would match the rest. Something like `repeatedFree[String] and requiredFree[Int]` should also successfully match "foo 5 bar", since back-tracking will eventually find that the `requiredFree[Int]` must match the "5", and the `repeatedFree[String]` will match everything else.
 
 ```scala
 def requiredBranch[A](kvs: (String, Arg[A])*): Arg[A]
@@ -229,8 +227,6 @@ def or[B >: A](arg2: Arg[B], f: (B, B) => B): Arg[B]
 ```
 Same as `xor`, except does not fail if both are present. Instead, calls `f` with the output from both. (In the order `f(thisOutput, arg2Output)`).
 
-Also note that free args do not work correctly when combined using `or` or `xor`. To do so correctly would require back-tracking that is not currently implemented.
-
 ```scala
 def default[B](b: B)(implicit ev: A <:< Option[B]): Arg[B]
 ```
@@ -258,31 +254,42 @@ object VisitNoop extends VisitResult[Nothing]
 
 trait Arg[+A] {
 
-  def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[A]
+  def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[A]]
 
   def complete: Try[A]
 
 }
 ```
 
-The `visit` method will be called multiple times, passing in smaller and smaller subsets of the command-line arguments. If the head of the passed list is not relevant to the Arg, it should return `VisitNoop`. If the head is relevant, but incorrect or unexpected in some way, it should return `VisitError`. Any errors will fail the entire parse. If the head is relevant and correct, A `VisitConsume` should be returned containing a new `Arg` to use for parsing instead of this from here on out, and the remaining unmatched/unconsumed part of the arguments. If you do not wish to use a purely-functional style, you may instead mutate the `Arg` and return `this`.
+The `visit` method will be called multiple times, passing in smaller and smaller subsets of the command-line arguments. Most often, the returned `Seq` should contain a single element. If the head of the passed list is not relevant to the Arg, it should return `VisitNoop`. If the head is relevant, but incorrect or unexpected in some way, it should return `VisitError`. If the head is relevant and correct, A `VisitConsume` should be returned containing a new `Arg` to use for parsing instead of this from here on out, and the remaining unmatched/unconsumed part of the arguments. If you do not wish to use a purely-functional style, you may instead mutate the `Arg` and return `this`. If it is unclear which to return, depending on the rest of the arguments, and you wish to allow back-tracking to find the correct option, return a `Seq` with multiple elements. The back-tracking procedure has the possibility of becoming exponential, so putting more likely outcomes first can vastly improve runtime.
 
 The branching arg class is a good simple example implementation:
 ```scala
 class BranchArg[A](branch: Map[String, Arg[A]]) extends Arg[Option[A]] {
-  override def visit(xs: NonEmptyList[String], free: Boolean, mode: ArgMode): VisitResult[Option[A]] = xs match {
+  override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[Option[A]]] = xs match {
     case NonEmptyList(x, rest) => branch.get(x) match {
-      case Some(arg) => VisitConsume(arg.map(a => Some(a)), rest)
-      case None => VisitNoop
+      case Some(arg) => Seq(VisitConsume(arg.map(a => Some(a)), rest))
+      case None => Seq(VisitNoop)
     }
   }
   override def complete: Try[Option[A]] = Success(None)
 }
 ```
 
+And the repeated free arg class is a good example of returning multiple `VisitResult`s for back-tracking:
+```scala
+case class RepeatedFreeArg[A](
+    parse: String => Try[A], collected: List[String] = Nil) extends Arg[List[A]] {
+  override def visit(xs: NonEmptyList[String], mode: ArgMode): Seq[VisitResult[List[A]]] = xs match {
+    case NonEmptyList(head, rest) => Seq(VisitNoop, VisitConsume(this.copy(collected = collected :+ head), rest))
+  }
+  override def complete: Try[List[A]] = Utils.sequence(collected.map(parse))
+}
+```
+
 **An instance of the `Reader` typeclass is required for parsing individual argument values from strings to specific types**
 
-This is the one section of code that is somewhat less type-safe (it's "stringly-typed"), so it is isolated and very simple. Default instances are provided for: String, Boolean, Byte, Short, Int, Long, Float, Double, Char, `List[A : Reader]` (comma-separated), and `Either[A : Reader, B : Reader]`.
+This is the one section of code that is somewhat less type-safe (it's "stringly-typed"), so it is isolated and very simple. Default instances are provided for: String, Boolean, Byte, Short, Int, Long, Float, Double, Char, java.time.Duration, scala.concurrent.duration.Duration, File, Path, LocalDate, LocalTime, LocalDateTime (all ISO 8601), `List[A : Reader]` (comma-separated), and `Either[A : Reader, B : Reader]`.
 
 If you wish to parse to some other class, this is also extensible. The trait to implement is:
 ```scala
