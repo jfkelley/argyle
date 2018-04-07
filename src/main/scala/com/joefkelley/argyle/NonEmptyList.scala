@@ -8,7 +8,7 @@ package com.joefkelley.argyle
  * at runtime. But Option's .get should be avoided anyway and is the only way to bypass the compiler's checks here.
  */
 class NonEmptyList[+A] private (contents: List[A]) {
-  require(contents.size > 0)
+  require(contents.nonEmpty)
   def head: A = contents.head
   def tail: List[A] = contents.tail
 }

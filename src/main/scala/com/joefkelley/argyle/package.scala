@@ -1,12 +1,11 @@
 package com.joefkelley
 
-import scala.util.{Try, Success, Failure}
-import argyle.reader._
-import scala.annotation.tailrec
-import scala.language.implicitConversions
+import com.joefkelley.argyle.reader._
 import shapeless._
 import shapeless.ops.hlist._
-import argyle.NonEmptyList
+
+import scala.language.implicitConversions
+import scala.util.{Failure, Success, Try}
 
 package object argyle {
   
@@ -47,7 +46,7 @@ package object argyle {
     case Some(a) => Success(a)
   }
   
-  def optionalFree[A : Reader]: Arg[Option[A]] = new SingleFreeArg(implicitly[Reader[A]].apply)
+  def optionalFree[A : Reader]: Arg[Option[A]] = SingleFreeArg(implicitly[Reader[A]].apply)
   
   def repeatedFree[A : Reader]: Arg[List[A]] = RepeatedFreeArg(implicitly[Reader[A]].apply)
   

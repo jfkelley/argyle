@@ -1,10 +1,6 @@
 package com.joefkelley.argyle
 
-import com.joefkelley.argyle._
-import scala.util.{Try, Success, Failure}
-import scala.annotation.tailrec;
-import shapeless.HList
-import shapeless.ops.hlist._
+import scala.util.{Failure, Success, Try}
 
 sealed abstract class VisitResult[+A]
 case class VisitError(msg: String) extends VisitResult[Nothing]
