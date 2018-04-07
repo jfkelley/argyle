@@ -308,5 +308,7 @@ trait Reader[A] {
 
 Built-in instances are, unsurprisingly, very simple examples to follow:
 ```scala
-implicit val IntParser = new Reader[Int] { def apply(s: String) = Try(s.toInt) }
+implicit val IntParser = safeSummon[Int](s => s.toInt)
 ```
+
+There exists both a summon and a safeSummon methods defined in the Reader companion object that provides simplified ways of summoning a Reader instance.
