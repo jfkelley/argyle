@@ -636,7 +636,7 @@ class ArgsSpec extends FlatSpec with Matchers {
   }
   it should "nest with either" in {
     val arg = required[List[Either[Int, Char]]]("--foo")
-    arg.parse("--foo", "1,b,3") should succeedWith(List(Left(1),Right('b'),Left(3)))
+    arg.parse("--foo", "1,b,3") should succeedWith[List[Either[Int, Char]]](List(Left(1),Right('b'),Left(3)))
   }
   
   "Parser" should "fail on unused argument" in {
