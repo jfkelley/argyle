@@ -1,12 +1,14 @@
 import Dependencies._
 
+crossScalaVersions := Seq("2.11.8", "2.12.2")
+
 lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(
-      organization := "com.joefkelley",
-      scalaVersion := "2.12.1",
-      version      := "1.0.0"
-    )),
+                  organization := "com.joefkelley",
+                  scalaVersion := "2.12.2",
+                    version      := "1.0.0"
+                )),
     name := "argyle",
     libraryDependencies ++= Seq(
       scalaTest % Test,
